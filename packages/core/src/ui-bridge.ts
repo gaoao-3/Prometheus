@@ -1,5 +1,35 @@
 import { randomUUID } from "node:crypto";
-import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
+import { initTheme, type ExtensionUIContext, type ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
+
+try {
+	initTheme("dark");
+} catch {
+	// ignore if already initialized
+}
+
+const WEB_THEME_FALLBACK = {
+	name: "web",
+	appearance: "dark" as const,
+	colors: {},
+	getColorMode: () => "truecolor" as const,
+	getFgAnsi: () => "",
+	getBgAnsi: () => "",
+	fg: (_color: unknown, text: string) => text,
+	bg: (_color: unknown, text: string) => text,
+	style: (text: string) => text,
+	bold: (text: string) => text,
+	italic: (text: string) => text,
+	underline: (text: string) => text,
+	inverse: (text: string) => text,
+	strikethrough: (text: string) => text,
+	getThinkingBorderColor: () => (str: string) => str,
+	getBashModeBorderColor: () => (str: string) => str,
+};
+
+function getActiveTheme() {
+	const key = Symbol.for("@earendil-works/pi-coding-agent:theme");
+	return (globalThis as any)[key] ?? WEB_THEME_FALLBACK;
+}
 import type { PermissionPrompt, UIRequest, UIResponse } from "@prometheus/protocol";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -136,10 +166,12 @@ export class UIBridge {
 			addAutocompleteProvider: () => {},
 			setEditorComponent: () => {},
 			getEditorComponent: () => undefined,
-			// PI's theme instance is not publicly exported; terminal styling has no meaning in the Web UI.
-			theme: undefined,
-			getAllThemes: () => [],
-			getTheme: () => undefined,
+			// 返回安全的 Theme 实例，避免扩展在 Web UI 下访问 getFgAnsi 等样式方法时空指针崩溃
+			get theme() {
+				return getActiveTheme();
+			},
+			getAllThemes: () => ["dark", "light", "web"],
+			getTheme: () => getActiveTheme(),
 			setTheme: () => ({ success: false, error: "Web UI 不支持切换终端主题" }),
 			getToolsExpanded: () => true,
 			setToolsExpanded: () => {},
