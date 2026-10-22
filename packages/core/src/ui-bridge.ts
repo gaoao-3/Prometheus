@@ -1,6 +1,36 @@
 import { randomUUID } from "node:crypto";
-import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
+import { initTheme, type ExtensionUIContext, type ExtensionUIDialogOptions, type Theme } from "@earendil-works/pi-coding-agent";
 import type { PermissionPrompt, UIRequest, UIResponse } from "@prometheus/protocol";
+
+// PI 不公开导出当前 Theme 实例，而是存放在 globalThis 的全局 Symbol 下（见 pi-coding-agent: THEME_KEY）
+const THEME_KEY = Symbol.for("@earendil-works/pi-coding-agent:theme");
+
+/** Web UI 下终端样式没有意义，任何样式/配色调用都安全降级，原样返回文本或空串 */
+const NO_STYLE_THEME = new Proxy({} as Theme, {
+	get(_target, prop) {
+		if (prop === "name") return "web";
+		if (prop === "colors") return {};
+		if (prop === "appearance") return "dark";
+		if (prop === "getColorMode") return () => "none";
+		if (prop === "getFgAnsi" || prop === "getBgAnsi") return () => "";
+		if (prop === "getThinkingBorderColor" || prop === "getBashModeBorderColor") return () => (str: string) => str;
+		return (text: string) => text;
+	},
+});
+
+let themeReady = false;
+
+function getActiveTheme(): Theme {
+	if (!themeReady) {
+		themeReady = true;
+		try {
+			initTheme("dark");
+		} catch {
+			// themes 目录异常或已初始化时静默，安全降级到 NO_STYLE_THEME
+		}
+	}
+	return (globalThis as Record<symbol, Theme | undefined>)[THEME_KEY] ?? NO_STYLE_THEME;
+}
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 type RequestBody = DistributiveOmit<UIRequest, "id">;
@@ -136,10 +166,12 @@ export class UIBridge {
 			addAutocompleteProvider: () => {},
 			setEditorComponent: () => {},
 			getEditorComponent: () => undefined,
-			// PI's theme instance is not publicly exported; terminal styling has no meaning in the Web UI.
-			theme: undefined,
+			// 返回安全的 Theme 实例，避免扩展在 Web UI 下访问 getFgAnsi 等样式方法时空指针崩溃
+			get theme() {
+				return getActiveTheme();
+			},
 			getAllThemes: () => [],
-			getTheme: () => undefined,
+			getTheme: () => getActiveTheme(),
 			setTheme: () => ({ success: false, error: "Web UI 不支持切换终端主题" }),
 			getToolsExpanded: () => true,
 			setToolsExpanded: () => {},
