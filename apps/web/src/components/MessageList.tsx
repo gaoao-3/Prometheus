@@ -11,6 +11,8 @@ import { deleteMessage, editMessage, forkMessage, openFile, pluginActive, retryM
 import { ImageStrip } from "./ImageStrip.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { SubagentCard } from "./SubagentCard.tsx";
+import { ToolCluster } from "./ToolCluster.tsx";
+import { UserBubble } from "./UserBubble.tsx";
 
 const M = defineMessages({
 	zh: {
@@ -63,47 +65,6 @@ function userImages(m: UserMessage): ImageContent[] {
 	return typeof m.content === "string" ? [] : m.content.filter((c): c is ImageContent => c.type === "image");
 }
 
-/** Render user bubble text: preserves whitespace, wraps unbreakable words, and renders URLs as clickable links. */
-function renderUserText(text: string) {
-	const urlRegex = /(https?:\/\/[^\s]+)/g;
-	const parts = text.split(urlRegex);
-	if (parts.length <= 1) return text;
-	return parts.map((part, i) => {
-		if (urlRegex.test(part)) {
-			// Strip trailing Chinese/ASCII punctuation if attached to the link
-			const clean = part.replace(/[，。！？、；：)\]}>]+$/, "");
-			const trailing = part.slice(clean.length);
-			return (
-				<span key={i}>
-					<a
-						href={clean}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="font-mono text-[13.5px] text-ember-400 underline decoration-ember-400/40 underline-offset-3 hover:text-ember-300 hover:decoration-ember-300 break-all"
-					>
-						{clean}
-					</a>
-					{trailing}
-				</span>
-			);
-		}
-		return part;
-	});
-}
-
-/** The bubble of a sent message: pictures above the words, either part optional. */
-function UserBubble({ text, images }: { text: string; images: ImageContent[] }) {
-	return (
-		<div className="flex min-w-0 max-w-[85%] flex-col items-end gap-2 md:max-w-[78%]">
-			<ImageStrip images={images} align="end" />
-			{text && (
-				<div className="min-w-0 max-w-full rounded-2xl rounded-br-xs border border-ember-500/20 bg-gradient-to-b from-ink-800 to-ink-850 px-4 py-2.5 text-[15px] leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-ink-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] md:px-4.5 md:py-3">
-					{renderUserText(text)}
-				</div>
-			)}
-		</div>
-	);
-}
 
 /** Inline editor for a sent message; resending branches the chat from before it. */
 function UserEditor({ index, initial, onClose }: { index: number; initial: string; onClose: () => void }) {
@@ -250,71 +211,6 @@ function ToolCard({ call, run, result }: { call: ToolCallContent; run?: ToolRun;
 	);
 }
 
-/** Compact elapsed time: 850ms, 12.3s, 1m05s. */
-function shortDuration(ms: number): string {
-	if (ms < 1000) return `${Math.round(ms)}ms`;
-	const s = ms / 1000;
-	if (s < 60) return `${s.toFixed(1)}s`;
-	return `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
-}
-
-/**
- * A turn's consecutive tool calls, folded into a single row. It opens by itself while something runs
- * or after a failure, folds back to one line once the round is done, and a click pins it either way.
- */
-function ToolCluster({ calls, tools, results }: { calls: ToolCallContent[]; tools: Record<string, ToolRun>; results: Map<string, ToolResultMessage> }) {
-	const t = useT(M);
-	const fold = usePrefs((p) => p.foldTools);
-	const [override, setOverride] = useState<boolean | null>(null);
-	const statuses = calls.map((c) => tools[c.id]?.status ?? (results.get(c.id) ? (results.get(c.id)?.isError ? "error" : "done") : "running"));
-	const running = statuses.filter((s) => s === "running").length;
-	const failed = statuses.filter((s) => s === "error").length;
-	// Folded off: keep the plain one-card-per-call look and skip the grouping row entirely.
-	if (!fold) {
-		return (
-			<>
-				{calls.map((c, i) => (
-					<ToolCard key={c.id || i} call={c} run={tools[c.id]} result={results.get(c.id)} />
-				))}
-			</>
-		);
-	}
-	const open = override ?? running + failed > 0;
-	const counts = new Map<string, number>();
-	for (const c of calls) counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
-	const names = [...counts].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
-	const summary = names.slice(0, 6).join(" · ") + (names.length > 6 ? " · …" : "");
-	const elapsed = calls.reduce((sum, c) => sum + (tools[c.id]?.durationMs ?? 0), 0);
-	return (
-		<div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900/70">
-			<button type="button" aria-expanded={open} onClick={() => setOverride(!open)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left">
-				<span
-					className={clsx(
-						"grid size-6 shrink-0 place-items-center rounded-md",
-						running > 0 && "bg-ember-500/15 text-ember-300",
-						running === 0 && failed > 0 && "bg-rose-400/12 text-rose-400",
-						running === 0 && failed === 0 && "bg-moss-400/12 text-moss-400",
-					)}
-				>
-					{running > 0 ? <LoaderCircle className="size-3.5 animate-spin" /> : failed > 0 ? <CircleAlert className="size-3.5" /> : <Check className="size-3.5" />}
-				</span>
-				<span className="shrink-0 text-[13px] font-medium text-ink-100">{t("toolCalls", { n: calls.length })}</span>
-				<span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-500">{summary}</span>
-				{running > 0 && <span className="shrink-0 font-mono text-[11px] text-ember-300">{t("toolRunning", { n: running })}</span>}
-				{running === 0 && failed > 0 && <span className="shrink-0 font-mono text-[11px] text-rose-400">{t("toolFailed", { n: failed })}</span>}
-				{elapsed >= 100 && <span className="shrink-0 font-mono text-[11px] text-ink-600">{shortDuration(elapsed)}</span>}
-				{open ? <ChevronDown className="size-3.5 shrink-0 text-ink-500" /> : <ChevronRight className="size-3.5 shrink-0 text-ink-500" />}
-			</button>
-			<Collapse open={open}>
-				<div className="flex flex-col gap-2 border-t border-ink-800 p-2">
-					{calls.map((c, i) => (
-						<ToolCard key={c.id || i} call={c} run={tools[c.id]} result={results.get(c.id)} />
-					))}
-				</div>
-			</Collapse>
-		</div>
-	);
-}
 
 type BlockMode = "all" | "steps" | "final";
 
@@ -345,7 +241,11 @@ function AssistantBlock({
 		if (!first) return;
 		rows.push(
 			calls.length > 1 ? (
-				<ToolCluster key={`cluster-${first.id}`} calls={calls} tools={tools} results={results} />
+				<ToolCluster key={`cluster-${first.id}`} calls={calls} tools={tools} results={results}>
+					{calls.map((c, i) => (
+						<ToolCard key={c.id || i} call={c} run={tools[c.id]} result={results.get(c.id)} />
+					))}
+				</ToolCluster>
 			) : (
 				<ToolCard key={first.id} call={first} run={tools[first.id]} result={results.get(first.id)} />
 			),
