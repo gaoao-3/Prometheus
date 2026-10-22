@@ -34,6 +34,7 @@ const M = defineMessages({
 		compactTooSmall: "当前对话还很短，暂无需压缩",
 		alreadyCompacted: "上下文刚压缩过，暂无需再次压缩",
 		compacted: "上下文已压缩",
+		compactOwned: "本次压缩被扩展取消：上下文由扩展接管（如上下文管理插件），未做原生压缩",
 		retrying: "请求失败，{s} 秒后重试（{a}/{m}）：{e}",
 		retryFailed: "重试失败：{e}",
 		forked: "已 Fork 为新会话",
@@ -51,6 +52,7 @@ const M = defineMessages({
 		compactTooSmall: "The conversation is still short; nothing to compact",
 		alreadyCompacted: "Context was just compacted; nothing more to compact",
 		compacted: "Context compacted",
+		compactOwned: "Compaction cancelled by an extension: context management is owned by an extension (e.g. a context plugin)",
 		retrying: "Request failed, retrying in {s}s ({a}/{m}): {e}",
 		retryFailed: "Retry failed: {e}",
 		forked: "Forked into a new session",
@@ -311,12 +313,19 @@ function reduce(session: ActiveSession, e: SessionEvent): ActiveSession {
 			return { ...session, queue: { steering: e.steering, followUp: e.followUp } };
 		case "compaction_start":
 			return { ...session, banner: { kind: "compaction", text: tr(M, "compacting") } };
-		case "compaction_end":
+		case "compaction_end": {
+			// An extension can own context management and cancel PI's own compaction; that is not a failure.
+			const owned = Boolean(e.errorMessage?.includes("Compaction cancelled"));
+			if (e.aborted || owned) {
+				if (e.reason === "manual" && owned) toast(tr(M, "compactOwned"));
+				return { ...session, banner: null };
+			}
 			if (e.errorMessage?.includes("Nothing to compact")) toast(tr(M, "compactTooSmall"));
 			else if (e.errorMessage?.includes("Already compacted")) toast(tr(M, "alreadyCompacted"));
 			else if (e.errorMessage) toast(tr(M, "compactFailed", { e: e.errorMessage.replace(/^Compaction failed:\s*/, "") }), "error");
-			else if (!e.aborted && e.reason === "manual") toast(tr(M, "compacted"));
+			else if (e.reason === "manual") toast(tr(M, "compacted"));
 			return { ...session, banner: null };
+		}
 		case "auto_retry_start":
 			return {
 				...session,
