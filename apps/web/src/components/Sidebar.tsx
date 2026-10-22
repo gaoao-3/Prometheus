@@ -14,6 +14,7 @@ import {
 	FolderSearch,
 	FolderPlus,
 	GitBranch,
+	LoaderCircle,
 	LogOut,
 	MoreHorizontal,
 	Pencil,
@@ -171,11 +172,16 @@ function SessionMenu({ s, onRename }: { s: SessionSummary; onRename: () => void 
 	);
 }
 
-function SessionRow({ s, active }: { s: SessionSummary; active: boolean }) {
+function SessionRow({ s, active, onSelect }: { s: SessionSummary; active: boolean; onSelect?: () => void }) {
 	const t = useT(M);
 	const lang = usePrefs((p) => p.lang);
 	const [editing, setEditing] = useState(false);
 	const [name, setName] = useState("");
+	const [opening, setOpening] = useState(false);
+
+	useEffect(() => {
+		if (active) setOpening(false);
+	}, [active]);
 	const title = s.name || s.firstMessage || t("newSession");
 	const startRename = () => {
 		setName(s.name || s.firstMessage || "");
@@ -208,8 +214,19 @@ function SessionRow({ s, active }: { s: SessionSummary; active: boolean }) {
 		<div
 			role="button"
 			tabIndex={0}
-			onClick={() => !active && void openSession(s.id)}
-			onKeyDown={(e) => e.key === "Enter" && void openSession(s.id)}
+			onClick={() => {
+				if (active) return;
+				setOpening(true);
+				onSelect?.();
+				void openSession(s.id).finally(() => setOpening(false));
+			}}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" && !active) {
+					setOpening(true);
+					onSelect?.();
+					void openSession(s.id).finally(() => setOpening(false));
+				}
+			}}
 			onDoubleClick={startRename}
 			className={clsx(
 				"group relative flex cursor-pointer items-center gap-2 rounded-lg py-1.5 pr-1.5 pl-3 transition-colors",
@@ -219,7 +236,10 @@ function SessionRow({ s, active }: { s: SessionSummary; active: boolean }) {
 		>
 			{active && <span className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-ember-500" />}
 			<div className="min-w-0 flex-1">
-				<div className="truncate text-[13px] text-ink-200">{title}</div>
+				<div className="flex items-center gap-1.5 truncate text-[13px] text-ink-200">
+					<span className="truncate">{title}</span>
+					{opening && <LoaderCircle className="size-3 shrink-0 animate-spin text-ember-400" />}
+				</div>
 				<div className="flex items-center gap-1.5 text-[10.5px] text-ink-500">
 					{s.live && <span className="size-1.5 rounded-full bg-moss-400" />}
 					<span>{relativeTime(s.modified, lang)}</span>
@@ -296,7 +316,7 @@ function useExpanded(id: string) {
 /** How many chats a workspace shows before the "show more" step, so one big folder cannot bury the rest. */
 const PAGE = 8;
 
-function WorkspaceGroup({ w, sessions, activeId, current }: { w: WorkspaceInfo; sessions: SessionSummary[]; activeId?: string; current: boolean }) {
+function WorkspaceGroup({ w, sessions, activeId, current, onSelect }: { w: WorkspaceInfo; sessions: SessionSummary[]; activeId?: string; current: boolean; onSelect?: () => void }) {
 	const t = useT(M);
 	const [showArchived, setShowArchived] = useState(false);
 	const [limit, setLimit] = useState(PAGE);
@@ -365,7 +385,7 @@ function WorkspaceGroup({ w, sessions, activeId, current }: { w: WorkspaceInfo; 
 						</div>
 					)}
 				</div>
-				<button type="button" onClick={() => void newChatIn(w)} className="rounded p-0.5 text-ink-500 hover:bg-ink-700 hover:text-ember-300" title={t("newChat")}>
+				<button type="button" onClick={() => { onSelect?.(); void newChatIn(w); }} className="rounded p-0.5 text-ink-500 hover:bg-ink-700 hover:text-ember-300" title={t("newChat")}>
 					<Plus className="size-4" />
 				</button>
 			</div>
@@ -373,7 +393,7 @@ function WorkspaceGroup({ w, sessions, activeId, current }: { w: WorkspaceInfo; 
 				<div className="mt-0.5 ml-3 space-y-0.5 border-l border-ink-800 pl-1.5">
 					{live.length === 0 && <div className="px-3 py-1.5 text-xs text-ink-600">{t("empty")}</div>}
 					{shown.map((s) => (
-						<SessionRow key={s.id} s={s} active={s.id === activeId} />
+						<SessionRow key={s.id} s={s} active={s.id === activeId} onSelect={onSelect} />
 					))}
 					{live.length > PAGE && (
 						<button
@@ -392,7 +412,7 @@ function WorkspaceGroup({ w, sessions, activeId, current }: { w: WorkspaceInfo; 
 							</button>
 							<Collapse open={showArchived}>
 								{archived.map((s) => (
-									<SessionRow key={s.id} s={s} active={s.id === activeId} />
+									<SessionRow key={s.id} s={s} active={s.id === activeId} onSelect={onSelect} />
 								))}
 							</Collapse>
 						</>
@@ -403,7 +423,7 @@ function WorkspaceGroup({ w, sessions, activeId, current }: { w: WorkspaceInfo; 
 	);
 }
 
-export function Sidebar({ target, onDisconnect }: { target: BackendTarget; onDisconnect: () => void }) {
+export function Sidebar({ target, onDisconnect, onClose }: { target: BackendTarget; onDisconnect: () => void; onClose?: () => void }) {
 	const t = useT(M);
 	const sessions = useStore((s) => s.sessions);
 	const workspaces = useStore((s) => s.workspaces);
@@ -443,7 +463,7 @@ export function Sidebar({ target, onDisconnect }: { target: BackendTarget; onDis
 			<div className="px-2 pt-3">
 				<button
 					type="button"
-					onClick={startNewChat}
+					onClick={() => { startNewChat(); onClose?.(); }}
 					className="flex w-full items-center gap-2 rounded-lg border border-ink-700 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-ember-500/50 hover:bg-ink-850"
 				>
 					<Plus className="size-4 text-ember-400" /> {t("startChat")}
@@ -451,7 +471,7 @@ export function Sidebar({ target, onDisconnect }: { target: BackendTarget; onDis
 				{tools.length > 0 && (
 					<div className="mt-1 space-y-0.5">
 						{tools.map((n) => (
-							<button key={n.view} type="button" onClick={() => setView(n.view)} className={navClass(view === n.view)}>
+							<button key={n.view} type="button" onClick={() => { setView(n.view); onClose?.(); }} className={navClass(view === n.view)}>
 								<n.icon className={clsx("size-4", view === n.view && "text-ember-400")} />
 								{n.label}
 							</button>
@@ -484,13 +504,13 @@ export function Sidebar({ target, onDisconnect }: { target: BackendTarget; onDis
 					</button>
 				)}
 				{workspaces.map((w) => (
-					<WorkspaceGroup key={w.id} w={w} sessions={grouped.get(w.id) ?? []} activeId={active?.id} current={active?.workspaceId === w.id} />
+					<WorkspaceGroup key={w.id} w={w} sessions={grouped.get(w.id) ?? []} activeId={active?.id} current={active?.workspaceId === w.id} onSelect={onClose} />
 				))}
 			</div>
 
 			<nav className="space-y-0.5 border-t hairline px-2 py-2">
 				{nav.map((n) => (
-					<button key={n.view} type="button" onClick={() => setView(n.view)} className={navClass(view === n.view)}>
+					<button key={n.view} type="button" onClick={() => { setView(n.view); onClose?.(); }} className={navClass(view === n.view)}>
 						<n.icon className={clsx("size-4", view === n.view && "text-ember-400")} />
 						{n.label}
 					</button>
@@ -498,13 +518,13 @@ export function Sidebar({ target, onDisconnect }: { target: BackendTarget; onDis
 				{panels.map((p) => {
 					const on = typeof view === "object" && view.panel === p.url;
 					return (
-						<button key={`${p.plugin}:${p.id}`} type="button" onClick={() => setView({ panel: p.url })} className={navClass(on)}>
+						<button key={`${p.plugin}:${p.id}`} type="button" onClick={() => { setView({ panel: p.url }); onClose?.(); }} className={navClass(on)}>
 							<PuzzleIcon className={clsx("size-4", on && "text-ember-400")} />
 							{p.title}
 						</button>
 					);
 				})}
-				<button type="button" onClick={() => openSettings()} className={navClass(view === "settings")}>
+				<button type="button" onClick={() => { openSettings(); onClose?.(); }} className={navClass(view === "settings")}>
 					<Settings className={clsx("size-4", view === "settings" && "text-ember-400")} />
 					{t("settings")}
 				</button>

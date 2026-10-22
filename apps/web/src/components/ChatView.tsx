@@ -6,6 +6,7 @@ import { Composer } from "./Composer.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { TaskPanel } from "./TaskPanel.tsx";
 import { Flame } from "./ui.tsx";
+import { ReconnectingBanner } from "./ReconnectingBanner.tsx";
 
 const M = defineMessages({
 	zh: {
@@ -59,15 +60,11 @@ export function ChatView() {
 	}
 
 	// No session yet, or one that has not received its first message: the new-chat page, which also hosts the workspace chooser.
-	if (!session || (session.messages.length === 0 && !session.pending)) return <NewChat reconnecting={conn !== "open"} />;
+	if (!session || (session.messages.length === 0 && !session.pending)) return <NewChat />;
 
 	return (
 		<>
-			{conn !== "open" && (
-				<div className="flex items-center justify-center gap-2 bg-ember-500/10 py-1.5 text-xs text-ember-300">
-					<LoaderCircle className="size-3 animate-spin" /> {t("reconnecting")}
-				</div>
-			)}
+			<ReconnectingBanner />
 			{session.banner && (
 				<div className="flex items-center justify-center gap-2 border-b border-ember-500/20 bg-ember-500/8 py-1.5 text-xs text-ember-200">
 					{session.banner.kind === "retry" ? <RotateCcw className="size-3" /> : <LoaderCircle className="size-3 animate-spin" />}
@@ -75,12 +72,13 @@ export function ChatView() {
 				</div>
 			)}
 			<div
+				key={session.id}
 				ref={scroller}
 				onScroll={(e) => {
 					const el = e.currentTarget;
 					pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 				}}
-				className="min-h-0 flex-1 overflow-y-auto"
+				className="min-h-0 flex-1 overflow-y-auto animate-session-enter"
 			>
 				<MessageList messages={session.messages} tools={session.tools} streaming={session.isStreaming} pending={session.pending} />
 			</div>
@@ -93,15 +91,11 @@ export function ChatView() {
 }
 
 /** Landing page for a chat that has no messages yet: branding plus the shared composer with a workspace chooser. */
-function NewChat({ reconnecting }: { reconnecting: boolean }) {
+function NewChat() {
 	const t = useT(M);
 	return (
 		<>
-			{reconnecting && (
-				<div className="flex items-center justify-center gap-2 bg-ember-500/10 py-1.5 text-xs text-ember-300">
-					<LoaderCircle className="size-3 animate-spin" /> {t("reconnecting")}
-				</div>
-			)}
+			<ReconnectingBanner />
 			<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-4 text-center md:px-6">
 				<Flame className="size-16 drop-shadow-[0_0_30px_rgb(var(--glow)/0.45)]" />
 				<h2 className="font-display text-4xl font-semibold tracking-tight">
