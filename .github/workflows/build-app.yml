@@ -1,0 +1,213 @@
+name: Build Custom App
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '构建目标 (Build target)'
+        required: true
+        default: 'android'
+        type: choice
+        options:
+          - android
+          - windows
+          - macos
+          - linux
+          - all
+      publish_release:
+        description: '发布到 GitHub Releases (否则仅作为 Artifacts 供直接下载)'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Release 标签名 (留空则自动使用 v<版本号>-custom)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Build Android APK
+    if: inputs.target == 'android' || inputs.target == 'all'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install NDK
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          sm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sm" ] || sm=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n1)
+          yes | "$sm" --licenses >/dev/null || true
+          "$sm" --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Build web UI and Android server bundle
+        run: |
+          pnpm --filter @prometheus/web build
+          pnpm --filter @prometheus/desktop bundle-server:android
+
+      - name: Generate the Android project
+        working-directory: apps/desktop
+        run: pnpm tauri android init --ci
+
+      - name: Apply app icons
+        run: |
+          res=apps/desktop/src-tauri/gen/android/app/src/main/res
+          [ -d "$res" ] || { echo "no res dir at $res" >&2; exit 1; }
+          cp -r apps/desktop/src-tauri/icons/android/. "$res/"
+          test -f "$res/mipmap-anydpi-v26/ic_launcher.xml"
+          test -f "$res/mipmap-xxxhdpi/ic_launcher_foreground.png"
+
+      - name: Cache pinned Termux packages
+        uses: actions/cache@v4
+        with:
+          path: .termux-cache
+          key: termux-${{ hashFiles('apps/desktop/scripts/android-termux.lock.json') }}
+
+      - name: Add Node, npm, git and the server to project
+        env:
+          TERMUX_CACHE: ${{ github.workspace }}/.termux-cache
+        run: pnpm --filter @prometheus/desktop android-runtime
+
+      - name: Signing key
+        id: key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          ks="$RUNNER_TEMP/release.p12"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$ks"
+            echo "suffix=" >> "$GITHUB_OUTPUT"
+          else
+            KEYSTORE_PASSWORD=$(openssl rand -hex 16)
+            KEY_ALIAS=prometheus
+            keytool -genkeypair -storetype PKCS12 -keystore "$ks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=Prometheus Custom"
+            echo "suffix=-custom" >> "$GITHUB_OUTPUT"
+          fi
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          echo "KS_PATH=$ks" >> "$GITHUB_ENV"
+          echo "KS_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "KS_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        working-directory: apps/desktop
+        run: pnpm tauri android build --apk --target aarch64
+
+      - name: Align and sign APK
+        run: |
+          apk=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -n1)
+          [ -n "$apk" ] || { echo "no unsigned APK produced" >&2; exit 1; }
+          bt="$ANDROID_HOME/build-tools/36.0.0"
+          version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          "$bt/zipalign" -f -p 4 "$apk" aligned.apk
+          "$bt/apksigner" sign --ks "$KS_PATH" --ks-type PKCS12 --ks-pass "pass:$KS_PASSWORD" --ks-key-alias "$KS_ALIAS" --out "Prometheus-v${version}-android-arm64${{ steps.key.outputs.suffix }}.apk" aligned.apk
+          ls -lh Prometheus-*.apk
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prometheus-android-apk
+          path: Prometheus-*.apk
+          retention-days: 90
+
+      - name: Publish to GitHub Releases
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ inputs.release_tag }}"
+          if [ -z "$tag" ]; then
+            version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+            tag="v${version}-custom"
+          fi
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Prometheus $tag" --notes "Custom downstream build with tool folding, message bubbles, and core improvements"
+          gh release upload "$tag" Prometheus-*.apk --clobber
+
+  desktop:
+    name: Build Desktop (${{ matrix.platform }})
+    if: inputs.target == matrix.platform || inputs.target == 'desktop' || inputs.target == 'all'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+          - platform: linux
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Linux system dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build web UI and server bundle
+        run: |
+          pnpm --filter @prometheus/web build
+          pnpm --filter @prometheus/desktop bundle-server
+          pnpm --filter @prometheus/desktop bundle-node
+
+      - name: Build desktop bundle
+        working-directory: apps/desktop
+        run: pnpm tauri build --config src-tauri/tauri.bundle.json
+
+      - name: Upload desktop bundle as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prometheus-${{ matrix.platform }}-bundle
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 90
