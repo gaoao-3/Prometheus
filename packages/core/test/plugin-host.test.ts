@@ -182,6 +182,15 @@ describe("PluginHost hot management", () => {
 		expect(r2.restartReasons.join()).toMatch(/重启/);
 		expect(host.list().find((p) => p.name === "beta")?.notes.length).toBe(1);
 	});
+	it("mounts custom ui and style endpoints via ctx.ui and ctx.style", async () => {
+		const { host } = await makeHost();
+		const res = await host.install({
+			name: "custom-ui",
+			files: [plugin("custom-ui", 'ctx.ui("/ui.js"); ctx.style("/theme.css");')],
+		});
+		expect(res.plugin.ui).toBe("/plugins/custom-ui/ui.js");
+		expect(res.plugin.style).toBe("/plugins/custom-ui/theme.css");
+	});
 });
 
 describe("validateFiles", () => {

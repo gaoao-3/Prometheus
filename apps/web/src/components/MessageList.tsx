@@ -13,6 +13,7 @@ import { Markdown } from "./Markdown.tsx";
 import { SubagentCard } from "./SubagentCard.tsx";
 import { ToolCluster } from "./ToolCluster.tsx";
 import { UserBubble } from "./UserBubble.tsx";
+import { prometheusUI } from "../lib/plugins-ui.ts";
 
 const M = defineMessages({
 	zh: {
@@ -160,6 +161,10 @@ function Avatar() {
 }
 
 function ToolCard({ call, run, result }: { call: ToolCallContent; run?: ToolRun; result?: ToolResultMessage }) {
+	const CustomRenderer = prometheusUI.getToolRenderer(call.name);
+	if (CustomRenderer) {
+		return <CustomRenderer call={call} run={run} result={result} />;
+	}
 	const [open, setOpen] = useState(false);
 	const status = run?.status ?? (result ? (result.isError ? "error" : "done") : "running");
 	const output = result ? resultText(result) : resultText(run?.result ?? run?.partial);

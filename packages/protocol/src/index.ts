@@ -399,6 +399,10 @@ export interface PluginInfo {
 	status: "loaded" | "error" | "disabled";
 	error?: string;
 	panels: PanelInfo[];
+	/** Client-side ESM UI script URL mounted by ctx.ui() */
+	ui?: string;
+	/** Client-side CSS stylesheet URL mounted by ctx.style() */
+	style?: string;
 	/** Can be switched off and on without a restart. */
 	toggleable: boolean;
 	/** Folder plugins can be deleted from inside the app. */

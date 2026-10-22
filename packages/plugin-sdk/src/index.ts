@@ -123,6 +123,10 @@ export interface PluginContext {
 	route(method: HttpMethod, path: string, handler: RouteHandler): void;
 	/** Add a sidebar panel rendered in an iframe. Server host only. */
 	panel(panel: PanelContribution): void;
+	/** Mount a client-side ESM UI script that the web host dynamically imports (e.g. "/ui.js"). */
+	ui(path: string): void;
+	/** Mount a client-side CSS stylesheet that the web host injects into <head> (e.g. "/style.css"). */
+	style(path: string): void;
 	/** Expose a method to clients as `plugin.call({ plugin: <name>, method })`. */
 	rpc(method: string, handler: RpcHandler): void;
 	/** Reload resources (skills, MCP, extensions) of live sessions; idle ones now, busy ones when they settle. */

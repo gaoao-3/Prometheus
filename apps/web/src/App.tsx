@@ -25,6 +25,7 @@ import { CONNECT_EVENT } from "./lib/platforms.ts";
 import { usePrefs } from "./lib/prefs.ts";
 import { checkForUpdate } from "./lib/updater.ts";
 import { useIsMobile } from "./lib/viewport.ts";
+import { syncPluginAssets } from "./lib/plugins-ui.ts";
 
 const closeView = () => setView("chat");
 
@@ -58,6 +59,11 @@ export function App() {
 		)
 			setView("chat");
 	}, [view, plugins]);
+	useEffect(() => {
+		if (target?.httpBase && plugins.length > 0) {
+			void syncPluginAssets(plugins, target.httpBase);
+		}
+	}, [target?.httpBase, plugins]);
 
 	useEffect(() => {
 		discoverBackend().then(setTarget, (err: unknown) => {

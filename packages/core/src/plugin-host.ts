@@ -171,6 +171,8 @@ export class PluginHost {
 		info.status = "loaded";
 		info.error = undefined;
 		info.panels = [];
+		info.ui = undefined;
+		info.style = undefined;
 		const reg: Registration = { factories: [], storeIds: [], rpcKeys: [], routes: [], disposers: [] };
 		entry.reg = reg;
 		try {
@@ -197,6 +199,8 @@ export class PluginHost {
 		const reg = entry.reg;
 		entry.reg = undefined;
 		entry.info.panels = [];
+		entry.info.ui = undefined;
+		entry.info.style = undefined;
 		if (!reg) return;
 		for (const id of reg.storeIds) this.stores.delete(id);
 		for (const key of reg.rpcKeys) this.rpcs.delete(key);
@@ -394,6 +398,14 @@ export class PluginHost {
 			},
 			panel: (panel) => {
 				entry.info.panels.push({ plugin: name, id: panel.id, title: panel.title, icon: panel.icon, url: `/plugins/${name}${panel.path}` });
+			},
+			ui: (path) => {
+				if (!path.startsWith("/")) throw new Error("UI 脚本 path 必须以 / 开头");
+				entry.info.ui = `/plugins/${name}${path}`;
+			},
+			style: (path) => {
+				if (!path.startsWith("/")) throw new Error("Style 样式 path 必须以 / 开头");
+				entry.info.style = `/plugins/${name}${path}`;
 			},
 			rpc: (method, handler) => {
 				if (!METHOD_PATTERN.test(method)) throw new Error(`RPC 方法名不合法：${method}`);
