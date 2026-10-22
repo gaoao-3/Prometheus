@@ -2,10 +2,11 @@ import clsx from "clsx";
 import { Collapse } from "./ui.tsx";
 import { confirmDialog } from "../lib/dialogs.ts";
 import { Brain, Check, Eye, ChevronDown, ChevronRight, CircleAlert, Copy, GitBranch, LoaderCircle, Pencil, RotateCcw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { AssistantMessage, ChatMessage, ImageContent, ToolCallContent, ToolResultMessage, UserMessage } from "@prometheus/protocol";
 import { defineMessages, useT } from "../lib/i18n.ts";
 import { imagesOf } from "../lib/images.ts";
+import { usePrefs } from "../lib/prefs.ts";
 import { deleteMessage, editMessage, forkMessage, openFile, pluginActive, retryMessage, type ToolRun, toast, useStore } from "../lib/store.ts";
 import { ImageStrip } from "./ImageStrip.tsx";
 import { Markdown } from "./Markdown.tsx";
@@ -17,6 +18,9 @@ const M = defineMessages({
 		thinking: "思考过程",
 		chars: "{n} 字",
 		aborted: "— 已中断",
+		toolCalls: "{n} 个工具调用",
+		toolRunning: "{n} 个运行中",
+		toolFailed: "{n} 个失败",
 		compacted: "上下文已压缩",
 		copy: "复制",
 		copied: "已复制",
@@ -33,6 +37,9 @@ const M = defineMessages({
 		thinking: "Thoughts",
 		chars: "{n} chars",
 		aborted: "— Stopped",
+		toolCalls: "{n} tool calls",
+		toolRunning: "{n} running",
+		toolFailed: "{n} failed",
 		compacted: "Context compacted",
 		copy: "Copy",
 		copied: "Copied",
@@ -209,31 +216,149 @@ function ToolCard({ call, run, result }: { call: ToolCallContent; run?: ToolRun;
 	);
 }
 
-function AssistantBlock({ message, live, tools, results }: { message: AssistantMessage; live: boolean; tools: Record<string, ToolRun>; results: Map<string, ToolResultMessage> }) {
+/** Compact elapsed time: 850ms, 12.3s, 1m05s. */
+function shortDuration(ms: number): string {
+	if (ms < 1000) return `${Math.round(ms)}ms`;
+	const s = ms / 1000;
+	if (s < 60) return `${s.toFixed(1)}s`;
+	return `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
+}
+
+/**
+ * A turn's consecutive tool calls, folded into a single row. It opens by itself while something runs
+ * or after a failure, folds back to one line once the round is done, and a click pins it either way.
+ */
+function ToolCluster({ calls, tools, results }: { calls: ToolCallContent[]; tools: Record<string, ToolRun>; results: Map<string, ToolResultMessage> }) {
 	const t = useT(M);
-	const last = message.content.length - 1;
+	const fold = usePrefs((p) => p.foldTools);
+	const [override, setOverride] = useState<boolean | null>(null);
+	const statuses = calls.map((c) => tools[c.id]?.status ?? (results.get(c.id) ? (results.get(c.id)?.isError ? "error" : "done") : "running"));
+	const running = statuses.filter((s) => s === "running").length;
+	const failed = statuses.filter((s) => s === "error").length;
+	// Folded off: keep the plain one-card-per-call look and skip the grouping row entirely.
+	if (!fold) {
+		return (
+			<>
+				{calls.map((c, i) => (
+					<ToolCard key={c.id || i} call={c} run={tools[c.id]} result={results.get(c.id)} />
+				))}
+			</>
+		);
+	}
+	const open = override ?? running + failed > 0;
+	const counts = new Map<string, number>();
+	for (const c of calls) counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
+	const names = [...counts].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
+	const summary = names.slice(0, 6).join(" · ") + (names.length > 6 ? " · …" : "");
+	const elapsed = calls.reduce((sum, c) => sum + (tools[c.id]?.durationMs ?? 0), 0);
 	return (
-		<div className="space-y-3">
-			{message.content.map((block, i) => {
-				if (!block) return null;
-				if (block.type === "thinking") return block.thinking.trim() ? <ThinkingBlock key={i} text={block.thinking} live={live && i === last} /> : null;
-				if (block.type === "toolCall") {
-					const card = <ToolCard key={block.id || i} call={block} run={tools[block.id]} result={results.get(block.id)} />;
-					return block.name === "subagent" ? <SubagentCard key={block.id || i} callId={block.id} fallback={card} /> : card;
-				}
-				return (
-					<div key={i} className={clsx(live && i === last && "caret")}>
-						<Markdown text={block.text} />
-					</div>
-				);
-			})}
-			{live && message.content.length === 0 && <Pondering />}
-			{message.stopReason === "error" && message.errorMessage && (
-				<div className="rounded-lg border border-rose-400/25 bg-rose-400/8 px-3 py-2 text-sm text-rose-400">{message.errorMessage}</div>
-			)}
-			{message.stopReason === "aborted" && <div className="text-xs text-ink-500">{t("aborted")}</div>}
+		<div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900/70">
+			<button type="button" aria-expanded={open} onClick={() => setOverride(!open)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left">
+				<span
+					className={clsx(
+						"grid size-6 shrink-0 place-items-center rounded-md",
+						running > 0 && "bg-ember-500/15 text-ember-300",
+						running === 0 && failed > 0 && "bg-rose-400/12 text-rose-400",
+						running === 0 && failed === 0 && "bg-moss-400/12 text-moss-400",
+					)}
+				>
+					{running > 0 ? <LoaderCircle className="size-3.5 animate-spin" /> : failed > 0 ? <CircleAlert className="size-3.5" /> : <Check className="size-3.5" />}
+				</span>
+				<span className="shrink-0 text-[13px] font-medium text-ink-100">{t("toolCalls", { n: calls.length })}</span>
+				<span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-500">{summary}</span>
+				{running > 0 && <span className="shrink-0 font-mono text-[11px] text-ember-300">{t("toolRunning", { n: running })}</span>}
+				{running === 0 && failed > 0 && <span className="shrink-0 font-mono text-[11px] text-rose-400">{t("toolFailed", { n: failed })}</span>}
+				{elapsed >= 100 && <span className="shrink-0 font-mono text-[11px] text-ink-600">{shortDuration(elapsed)}</span>}
+				{open ? <ChevronDown className="size-3.5 shrink-0 text-ink-500" /> : <ChevronRight className="size-3.5 shrink-0 text-ink-500" />}
+			</button>
+			<Collapse open={open}>
+				<div className="flex flex-col gap-2 border-t border-ink-800 p-2">
+					{calls.map((c, i) => (
+						<ToolCard key={c.id || i} call={c} run={tools[c.id]} result={results.get(c.id)} />
+					))}
+				</div>
+			</Collapse>
 		</div>
 	);
+}
+
+/** A whole turn: every assistant message of the round is rendered in one pass, so tool calls fold once per turn. */
+function TurnBody({
+	group,
+	streaming,
+	lastIndex,
+	tools,
+	results,
+}: {
+	group: { message: AssistantMessage; index: number }[];
+	streaming: boolean;
+	lastIndex: number;
+	tools: Record<string, ToolRun>;
+	results: Map<string, ToolResultMessage>;
+}) {
+	const t = useT(M);
+	const rows: ReactNode[] = [];
+	let pending: ToolCallContent[] = [];
+	/** Emit the collected run: one card for a single call, one folded cluster for several. */
+	const flush = () => {
+		const calls = pending;
+		pending = [];
+		const first = calls[0];
+		if (!first) return;
+		rows.push(
+			calls.length > 1 ? (
+				<ToolCluster key={`cluster-${first.id}`} calls={calls} tools={tools} results={results} />
+			) : (
+				<ToolCard key={first.id} call={first} run={tools[first.id]} result={results.get(first.id)} />
+			),
+		);
+	};
+	for (const { message, index } of group) {
+		const live = streaming && index === lastIndex;
+		const last = message.content.length - 1;
+		for (const [i, block] of message.content.entries()) {
+			if (!block) continue;
+			// A subagent card carries its own live progress, so it breaks the run instead of joining it.
+			if (block.type === "toolCall" && block.name !== "subagent") {
+				pending.push(block);
+				continue;
+			}
+			flush();
+			if (block.type === "thinking") {
+				if (block.thinking.trim()) rows.push(<ThinkingBlock key={`${index}:${i}`} text={block.thinking} live={live && i === last} />);
+				continue;
+			}
+			if (block.type === "toolCall") {
+				rows.push(<SubagentCard key={`${index}:${i}`} callId={block.id} fallback={<ToolCard call={block} run={tools[block.id]} result={results.get(block.id)} />} />);
+				continue;
+			}
+			rows.push(
+				<div key={`${index}:${i}`} className={clsx(live && i === last && "caret")}>
+					<Markdown text={block.text} />
+				</div>,
+			);
+		}
+		if (live && message.content.length === 0) rows.push(<Pondering key={`pondering-${index}`} />);
+		// A trailer belongs after this message's own cards, so it ends the run it follows.
+		if (message.stopReason === "error" && message.errorMessage) {
+			flush();
+			rows.push(
+				<div key={`error-${index}`} className="rounded-lg border border-rose-400/25 bg-rose-400/8 px-3 py-2 text-sm text-rose-400">
+					{message.errorMessage}
+				</div>,
+			);
+		}
+		if (message.stopReason === "aborted") {
+			flush();
+			rows.push(
+				<div key={`aborted-${index}`} className="text-xs text-ink-500">
+					{t("aborted")}
+				</div>,
+			);
+		}
+	}
+	flush();
+	return <>{rows}</>;
 }
 
 function assistantText(m: AssistantMessage): string {
@@ -352,9 +477,7 @@ export function MessageList({
 							<Avatar />
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-col gap-3">
-									{group.map((g) => (
-										<AssistantBlock key={g.index} message={g.message} live={streaming && g.index === lastIndex} tools={tools} results={results} />
-									))}
+									<TurnBody group={group} streaming={streaming} lastIndex={lastIndex} tools={tools} results={results} />
 									{live && awaitingNext && <Pondering />}
 								</div>
 								{!live && (
