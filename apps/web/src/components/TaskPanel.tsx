@@ -1,15 +1,19 @@
 import clsx from "clsx";
 import { Collapse } from "./ui.tsx";
 import { Check, ChevronDown, ChevronUp, ListChecks, LoaderCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { latestTodos } from "@prometheus/protocol";
 import { defineMessages, useT } from "../lib/i18n.ts";
+import { usePrefs } from "../lib/prefs.ts";
 import { pluginActive, useStore } from "../lib/store.ts";
 
 const M = defineMessages({
 	zh: { title: "任务清单", progress: "{done}/{total} 已完成", allDone: "全部完成", expand: "展开", collapse: "收起" },
 	en: { title: "Tasks", progress: "{done}/{total} done", allDone: "All done", expand: "Expand", collapse: "Collapse" },
 });
+
+/** How long a finished list stays open before it folds itself away. */
+const AUTO_FOLD_MS = 4000;
 
 /** The agent's live checklist, shown above the input. Hidden when the todos plugin is off or no list exists. */
 export function TaskPanel() {
@@ -18,21 +22,34 @@ export function TaskPanel() {
 	const enabled = useStore((s) => pluginActive(s.plugins, "todos"));
 	const sessionId = useStore((s) => s.session?.id);
 	const todos = useMemo(() => (enabled && messages ? latestTodos(messages) : []), [enabled, messages]);
-	// Remember the collapsed state per conversation, not globally.
-	const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+	const foldTodos = usePrefs((p) => p.foldTodos);
+	const key = sessionId ?? "";
+	// A click pins the choice for this conversation; otherwise the panel folds itself once the list is done.
+	const [manual, setManual] = useState<Record<string, boolean>>({});
+	const [settled, setSettled] = useState<Record<string, boolean>>({});
+	const done = todos.filter((x) => x.status === "completed").length;
+	const finished = todos.length > 0 && done === todos.length;
+	useEffect(() => {
+		if (!finished || !foldTodos) {
+			// Unfinished, or folding switched off: forget the auto fold so the next completion can fold again.
+			setSettled((s) => (s[key] ? { ...s, [key]: false } : s));
+			return;
+		}
+		// Let the finished list stay readable for a moment before it folds away.
+		const timer = setTimeout(() => setSettled((s) => ({ ...s, [key]: true })), AUTO_FOLD_MS);
+		return () => clearTimeout(timer);
+	}, [finished, foldTodos, key]);
 	if (!todos.length) return null;
 
-	const done = todos.filter((x) => x.status === "completed").length;
 	const current = todos.find((x) => x.status === "in_progress");
-	const finished = done === todos.length;
-	const closed = collapsed[sessionId ?? ""] ?? false;
+	const closed = manual[key] ?? settled[key] ?? false;
 
 	return (
 		<div className="mx-auto mb-2 w-full max-w-3xl px-3 md:px-5">
 			<div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900/70 backdrop-blur">
 				<button
 					type="button"
-					onClick={() => setCollapsed((c) => ({ ...c, [sessionId ?? ""]: !closed }))}
+					onClick={() => setManual((m) => ({ ...m, [key]: !closed }))}
 					className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs hover:bg-ink-850"
 					aria-expanded={!closed}
 					title={closed ? t("expand") : t("collapse")}

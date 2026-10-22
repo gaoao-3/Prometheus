@@ -23,12 +23,14 @@ interface Prefs {
 	sendMode: SendMode;
 	/** Fold a turn's consecutive tool calls into one collapsed row instead of one card each. */
 	foldTools: boolean;
+	/** Fold the task list away once every item is completed. */
+	foldTodos: boolean;
 }
 
 const KEY = "prometheus.prefs";
 
 function load(): Prefs {
-	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true };
+	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true, foldTodos: true };
 	try {
 		return { ...fallback, ...(JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Prefs>) };
 	} catch {

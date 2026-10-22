@@ -69,6 +69,8 @@ const M = defineMessages({
 		sendSteer: "插队",
 		foldTools: "自动收纳工具调用",
 		foldToolsHint: "把一轮里连续的多个工具调用折成一行：运行中自动展开，本轮回合结束自动收起；点一下可手动展开或折叠。",
+		foldTodos: "任务完成后自动收起",
+		foldTodosHint: "任务清单全部完成后自动折叠成一行标题（保留进度和完成状态），几秒内还可以看到结果；再点标题可重新展开。",
 		updates: "更新",
 		checkUpdate: "检查更新",
 		checking: "检查中…",
@@ -132,6 +134,8 @@ const M = defineMessages({
 		sendSteer: "Steer",
 		foldTools: "Collapse tool calls",
 		foldToolsHint: "Group a turn's consecutive tool calls into one row: it opens while they run and folds back when the round is done. Click the row to pin it open or closed.",
+		foldTodos: "Fold finished task list",
+		foldTodosHint: "When every task is completed the checklist folds itself into its header row (progress and completion state stay visible). Click the header to open it again.",
 		updates: "Updates",
 		checkUpdate: "Check for updates",
 		checking: "Checking…",
@@ -377,6 +381,9 @@ function GeneralSettings() {
 						</Row>
 						<Row label={t("foldTools")} hint={t("foldToolsHint")}>
 							<Toggle checked={prefs.foldTools} onChange={(foldTools) => setPrefs({ foldTools })} />
+						</Row>
+						<Row label={t("foldTodos")} hint={t("foldTodosHint")}>
+							<Toggle checked={prefs.foldTodos} onChange={(foldTodos) => setPrefs({ foldTodos })} />
 						</Row>
 					</Section>
 
