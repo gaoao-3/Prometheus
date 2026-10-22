@@ -10,9 +10,7 @@ on:
         type: choice
         options:
           - android
-          - windows
-          - macos
-          - linux
+          - desktop
           - all
       publish_release:
         description: '发布到 GitHub Releases (否则仅作为 Artifacts 供直接下载)'
@@ -154,7 +152,7 @@ jobs:
 
   desktop:
     name: Build Desktop (${{ matrix.platform }})
-    if: inputs.target == matrix.platform || inputs.target == 'desktop' || inputs.target == 'all'
+    if: inputs.target == 'desktop' || inputs.target == 'all'
     strategy:
       fail-fast: false
       matrix:
