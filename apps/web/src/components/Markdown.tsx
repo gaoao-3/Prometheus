@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
 	return (
 		<div className="prose-forge">
-			<ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}>
+			<ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}>
 				{text}
 			</ReactMarkdown>
 		</div>

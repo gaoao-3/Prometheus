@@ -1,8 +1,8 @@
 import clsx from "clsx";
 import { Collapse } from "./ui.tsx";
 import { confirmDialog } from "../lib/dialogs.ts";
-import { Brain, Check, Eye, ChevronDown, ChevronRight, CircleAlert, Copy, GitBranch, LoaderCircle, Pencil, RotateCcw, Trash2 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { Brain, Check, Eye, ChevronDown, ChevronRight, CircleAlert, Copy, GitBranch, History, LoaderCircle, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
 import type { AssistantMessage, ChatMessage, ImageContent, ToolCallContent, ToolResultMessage, UserMessage } from "@prometheus/protocol";
 import { defineMessages, useT } from "../lib/i18n.ts";
 import { imagesOf } from "../lib/images.ts";
@@ -35,6 +35,7 @@ const M = defineMessages({
 		cancel: "取消",
 		resend: "重新发送",
 		confirmDelete: "从上下文中删除这条消息？",
+		loadEarlier: "加载更早的消息（还有 {n} 条）",
 	},
 	en: {
 		thinkingLive: "Thinking…",
@@ -55,6 +56,7 @@ const M = defineMessages({
 		cancel: "Cancel",
 		resend: "Resend",
 		confirmDelete: "Remove this message from the context?",
+		loadEarlier: "Load earlier messages ({n} more)",
 	},
 });
 
@@ -443,6 +445,20 @@ function Actions({ index, indices, text, canRetry, align, onEdit }: { index: num
 }
 
 
+const DEFAULT_VISIBLE_ENTRIES = 24;
+
+type ChatEntry =
+	| { type: "user"; key: number; index: number; message: UserMessage }
+	| {
+			type: "assistant";
+			key: number;
+			lastInGroup: number;
+			group: { message: AssistantMessage; index: number }[];
+			awaitingNext: boolean;
+			live: boolean;
+	  }
+	| { type: "compaction"; key: number; index: number };
+
 export function MessageList({
 	messages,
 	tools,
@@ -456,42 +472,88 @@ export function MessageList({
 }) {
 	const t = useT(M);
 	const [editingAt, setEditingAt] = useState<number | null>(null);
-	const results = new Map<string, ToolResultMessage>();
-	for (const m of messages) if (m.role === "toolResult") results.set(m.toolCallId, m);
+	const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE_ENTRIES);
+
 	const lastIndex = messages.length - 1;
 	const waitingOnReply = Boolean(pending) || (streaming && messages[lastIndex]?.role === "user");
 
+	const { entries, results } = useMemo(() => {
+		const resultsMap = new Map<string, ToolResultMessage>();
+		for (const m of messages) {
+			if (m.role === "toolResult") resultsMap.set(m.toolCallId, m);
+		}
+		const list: ChatEntry[] = [];
+		for (let i = 0; i < messages.length; i++) {
+			const m = messages[i];
+			if (!m) continue;
+			if (m.role === "user") {
+				list.push({ type: "user", key: i, index: i, message: m });
+				continue;
+			}
+			if (m.role === "compactionSummary") {
+				list.push({ type: "compaction", key: i, index: i });
+				continue;
+			}
+			if (m.role === "assistant") {
+				const prev = messages.slice(0, i).findLast((p) => p.role !== "toolResult");
+				if (prev?.role === "assistant") continue;
+
+				const group: { message: AssistantMessage; index: number }[] = [];
+				for (let j = i; j < messages.length; j++) {
+					const g = messages[j];
+					if (g?.role === "assistant") group.push({ message: g, index: j });
+					else if (g?.role !== "toolResult") break;
+				}
+				const lastInGroup = group[group.length - 1]?.index ?? i;
+				const awaitingNext = lastInGroup < lastIndex && messages.slice(lastInGroup + 1).every((x) => x.role === "toolResult");
+				const live = streaming && (lastInGroup === lastIndex || awaitingNext);
+				list.push({
+					type: "assistant",
+					key: i,
+					lastInGroup,
+					group,
+					awaitingNext,
+					live,
+				});
+			}
+		}
+		return { entries: list, results: resultsMap };
+	}, [messages, streaming, lastIndex]);
+
+	const hasEarlier = entries.length > visibleCount;
+	const visibleEntries = hasEarlier ? entries.slice(-visibleCount) : entries;
+
 	return (
 		<div className="chat-col mx-auto w-full space-y-6 px-3 py-5 md:space-y-8 md:px-5 md:py-8">
-			{messages.map((m, i) => {
-				if (m.role === "user") {
-					const text = userText(m);
-					const editing = editingAt === i && !streaming;
+			{hasEarlier && (
+				<div className="flex justify-center pt-1 pb-2">
+					<button
+						type="button"
+						onClick={() => setVisibleCount((c) => Math.min(entries.length, c + 24))}
+						className="flex items-center gap-1.5 rounded-full border border-ink-800 bg-ink-900/90 px-4 py-1.5 text-xs text-ink-400 shadow-sm transition-all hover:border-ember-500/40 hover:bg-ink-850 hover:text-ink-200 active:scale-95"
+					>
+						<History className="size-3.5 text-ember-400" />
+						<span>{t("loadEarlier", { n: entries.length - visibleCount })}</span>
+					</button>
+				</div>
+			)}
+			{visibleEntries.map((entry) => {
+				if (entry.type === "user") {
+					const text = userText(entry.message);
+					const editing = editingAt === entry.index && !streaming;
 					return (
-						<div key={i} className="group/msg animate-rise">
+						<div key={entry.key} className="group/msg animate-rise">
 							<div className="flex min-w-0 justify-end">
-								{editing ? <UserEditor index={i} initial={text} onClose={() => setEditingAt(null)} /> : <UserBubble text={text} images={userImages(m)} />}
+								{editing ? <UserEditor index={entry.index} initial={text} onClose={() => setEditingAt(null)} /> : <UserBubble text={text} images={userImages(entry.message)} />}
 							</div>
-							{!editing && <Actions index={i} text={text} canRetry={!streaming} align="end" onEdit={() => setEditingAt(i)} />}
+							{!editing && <Actions index={entry.index} text={text} canRetry={!streaming} align="end" onEdit={() => setEditingAt(entry.index)} />}
 						</div>
 					);
 				}
-				if (m.role === "assistant") {
-					// Each tool round is its own assistant message; render a whole turn as one block.
-					const prev = messages.slice(0, i).findLast((p) => p.role !== "toolResult");
-					if (prev?.role === "assistant") return null;
-					const group: { message: AssistantMessage; index: number }[] = [];
-					for (let j = i; j < messages.length; j++) {
-						const g = messages[j];
-						if (g?.role === "assistant") group.push({ message: g, index: j });
-						else if (g?.role !== "toolResult") break;
-					}
-					const lastInGroup = group[group.length - 1]?.index ?? i;
-					// Tool results after the last assistant message mean the next model call is still pending.
-					const awaitingNext = lastInGroup < lastIndex && messages.slice(lastInGroup + 1).every((x) => x.role === "toolResult");
-					const live = streaming && (lastInGroup === lastIndex || awaitingNext);
+				if (entry.type === "assistant") {
+					const { group, lastInGroup, awaitingNext, live, key } = entry;
 					return (
-						<div key={i} className="group/msg flex gap-3">
+						<div key={key} className="group/msg flex gap-3">
 							<Avatar />
 							<div className="min-w-0 flex-1">
 								<TurnBody group={group} live={live} awaitingNext={awaitingNext} streaming={streaming} lastIndex={lastIndex} tools={tools} results={results} />
@@ -508,9 +570,9 @@ export function MessageList({
 						</div>
 					);
 				}
-				if (m.role === "compactionSummary") {
+				if (entry.type === "compaction") {
 					return (
-						<div key={i} className="flex items-center gap-3 text-xs text-ink-500">
+						<div key={entry.key} className="flex items-center gap-3 text-xs text-ink-500">
 							<span className="h-px flex-1 bg-ink-800" /> {t("compacted")} <span className="h-px flex-1 bg-ink-800" />
 						</div>
 					);
