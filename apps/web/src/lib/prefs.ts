@@ -21,12 +21,14 @@ interface Prefs {
 	/** Desktop: closing the window hides it to the tray instead of quitting. */
 	closeToTray: boolean;
 	sendMode: SendMode;
+	/** Fold a turn's consecutive tool calls into one collapsed row instead of one card each. */
+	foldTools: boolean;
 }
 
 const KEY = "prometheus.prefs";
 
 function load(): Prefs {
-	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp" };
+	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true };
 	try {
 		return { ...fallback, ...(JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Prefs>) };
 	} catch {

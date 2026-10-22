@@ -63,6 +63,8 @@ const M = defineMessages({
 		sendModeHint: "Agent 还在回复时发送新消息：排队是等本轮结束后再发，插队是在当前工具调用结束后立即插入。也可以在发送按钮旁的箭头上切换。",
 		sendFollowUp: "排队",
 		sendSteer: "插队",
+		foldTools: "自动收纳工具调用",
+		foldToolsHint: "把一轮里连续的多个工具调用折成一行：运行中自动展开，本轮回合结束自动收起；点一下可手动展开或折叠。",
 		updates: "更新",
 		checkUpdate: "检查更新",
 		checking: "检查中…",
@@ -122,6 +124,8 @@ const M = defineMessages({
 		sendModeHint: "What a message does when the agent is still replying: Queue waits for the turn to end, Steer cuts in after the current tool call. You can also switch from the arrow beside the send button.",
 		sendFollowUp: "Queue",
 		sendSteer: "Steer",
+		foldTools: "Collapse tool calls",
+		foldToolsHint: "Group a turn's consecutive tool calls into one row: it opens while they run and folds back when the round is done. Click the row to pin it open or closed.",
 		updates: "Updates",
 		checkUpdate: "Check for updates",
 		checking: "Checking…",
@@ -364,6 +368,9 @@ function GeneralSettings() {
 									{ value: "steer", label: t("sendSteer") },
 								]}
 							/>
+						</Row>
+						<Row label={t("foldTools")} hint={t("foldToolsHint")}>
+							<Toggle checked={prefs.foldTools} onChange={(foldTools) => setPrefs({ foldTools })} />
 						</Row>
 					</Section>
 
