@@ -5,15 +5,13 @@ import { Brain, Check, Eye, ChevronDown, ChevronRight, CircleAlert, Copy, GitBra
 import { type ReactNode, useMemo, useState } from "react";
 import type { AssistantMessage, ChatMessage, ImageContent, ToolCallContent, ToolResultMessage, UserMessage } from "@prometheus/protocol";
 import { defineMessages, useT } from "../lib/i18n.ts";
-import { imagesOf } from "../lib/images.ts";
+import { ToolCard } from "./ToolCard.tsx";
 import { usePrefs } from "../lib/prefs.ts";
-import { deleteMessage, editMessage, forkMessage, openFile, pluginActive, retryMessage, type ToolRun, toast, useStore } from "../lib/store.ts";
-import { ImageStrip } from "./ImageStrip.tsx";
+import { deleteMessage, editMessage, forkMessage, retryMessage, type ToolRun, toast } from "../lib/store.ts";
 import { Markdown } from "./Markdown.tsx";
 import { SubagentCard } from "./SubagentCard.tsx";
 import { ToolCluster } from "./ToolCluster.tsx";
 import { UserBubble } from "./UserBubble.tsx";
-import { prometheusUI } from "../lib/plugins-ui.ts";
 
 const M = defineMessages({
 	zh: {
@@ -109,21 +107,6 @@ function UserEditor({ index, initial, onClose }: { index: number; initial: strin
 	);
 }
 
-function resultText(value: unknown): string {
-	if (value == null) return "";
-	if (typeof value === "string") return value;
-	const v = value as { content?: { type: string; text?: string }[]; preview?: string };
-	if (Array.isArray(v.content)) return v.content.map((c) => c.text ?? `[${c.type}]`).join("\n");
-	if (typeof v.preview === "string") return `${v.preview}\n…（已截断）`;
-	return JSON.stringify(value, null, 2);
-}
-
-function argSummary(name: string, args: Record<string, unknown> | undefined): string {
-	if (!args) return "";
-	const key = ["command", "path", "file_path", "pattern", "query", "url"].find((k) => typeof args[k] === "string");
-	const raw = key ? String(args[key]) : JSON.stringify(args);
-	return raw.length > 90 ? `${raw.slice(0, 90)}…` : raw;
-}
 
 function ThinkingBlock({ text, live }: { text: string; live: boolean }) {
 	const t = useT(M);
@@ -162,61 +145,6 @@ function Avatar() {
 	);
 }
 
-function ToolCard({ call, run, result }: { call: ToolCallContent; run?: ToolRun; result?: ToolResultMessage }) {
-	const CustomRenderer = prometheusUI.getToolRenderer(call.name);
-	if (CustomRenderer) {
-		return <CustomRenderer call={call} run={run} result={result} />;
-	}
-	const [open, setOpen] = useState(false);
-	const status = run?.status ?? (result ? (result.isError ? "error" : "done") : "running");
-	const output = result ? resultText(result) : resultText(run?.result ?? run?.partial);
-	const pictures = result ? imagesOf(result) : imagesOf(run?.result ?? run?.partial);
-	const viewer = useStore((s) => pluginActive(s.plugins, "workbench"));
-	const cwd = useStore((s) => s.session?.cwd ?? "");
-	const filePath = ["read", "write", "edit"].includes(call.name) && typeof call.arguments?.path === "string" ? call.arguments.path : undefined;
-	return (
-		<div className={clsx("overflow-hidden rounded-xl border bg-ink-900/70", status === "error" ? "border-rose-400/25" : "border-ink-800")}>
-			<button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left">
-				<span
-					className={clsx(
-						"grid size-6 shrink-0 place-items-center rounded-md",
-						status === "running" && "bg-ember-500/15 text-ember-300",
-						status === "done" && "bg-moss-400/12 text-moss-400",
-						status === "error" && "bg-rose-400/12 text-rose-400",
-					)}
-				>
-					{status === "running" ? <LoaderCircle className="size-3.5 animate-spin" /> : status === "error" ? <CircleAlert className="size-3.5" /> : <Check className="size-3.5" />}
-				</span>
-				<span className="shrink-0 font-mono text-[13px] font-medium text-ink-100">{call.name || run?.toolName}</span>
-				<span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-500">{argSummary(call.name, call.arguments)}</span>
-				{viewer && filePath && (
-					<span
-						role="button"
-						tabIndex={0}
-						onClick={(e) => {
-							e.stopPropagation();
-							openFile(filePath, cwd);
-						}}
-						onKeyDown={(e) => e.key === "Enter" && (e.stopPropagation(), openFile(filePath, cwd))}
-						className="grid size-5 shrink-0 place-items-center rounded text-ink-500 hover:bg-ink-800 hover:text-ink-100"
-						title="View"
-					>
-						<Eye className="size-3.5" />
-					</span>
-				)}
-				{run?.durationMs !== undefined && <span className="shrink-0 font-mono text-[11px] text-ink-600">{(run.durationMs / 1000).toFixed(1)}s</span>}
-				{open ? <ChevronDown className="size-3.5 shrink-0 text-ink-500" /> : <ChevronRight className="size-3.5 shrink-0 text-ink-500" />}
-			</button>
-			<Collapse open={open}>
-				<div className="space-y-2 border-t border-ink-800 px-3 py-3">
-					<pre className="max-h-[35dvh] overflow-auto rounded-lg bg-ink-950 p-2.5 font-mono text-[11.5px] text-ink-300 md:max-h-48">{JSON.stringify(call.arguments, null, 2)}</pre>
-					{output && <pre className="max-h-[45dvh] overflow-auto rounded-lg bg-ink-950 p-2.5 font-mono text-[11.5px] break-words whitespace-pre-wrap text-ink-300 md:max-h-80">{output}</pre>}
-					<ImageStrip images={pictures} />
-				</div>
-			</Collapse>
-		</div>
-	);
-}
 
 
 type BlockMode = "all" | "steps" | "final";
