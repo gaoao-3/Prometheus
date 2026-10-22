@@ -271,13 +271,13 @@ function ToolCluster({ calls, tools, results }: { calls: ToolCallContent[]; tool
 				{elapsed >= 100 && <span className="shrink-0 font-mono text-[11px] text-ink-600">{shortDuration(elapsed)}</span>}
 				{open ? <ChevronDown className="size-3.5 shrink-0 text-ink-500" /> : <ChevronRight className="size-3.5 shrink-0 text-ink-500" />}
 			</button>
-			{open && (
+			<Collapse open={open}>
 				<div className="flex flex-col gap-2 border-t border-ink-800 p-2">
 					{calls.map((c, i) => (
 						<ToolCard key={c.id || i} call={c} run={tools[c.id]} result={results.get(c.id)} />
 					))}
 				</div>
-			)}
+			</Collapse>
 		</div>
 	);
 }
