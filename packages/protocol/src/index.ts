@@ -824,6 +824,7 @@ export interface RpcMethods {
 	"session.close": { params: { sessionId: string }; result: null };
 	"session.archive": { params: { sessionId: string; archived: boolean }; result: null };
 	"session.delete": { params: { sessionId: string }; result: null };
+	"session.prune": { params: { sessionId: string; keepTurns: number }; result: { prunedEntries: number; remainingMessages: number } };
 	"session.stats": { params: { sessionId: string }; result: SessionStats };
 	"usage.stats": { params: { days?: number }; result: UsageStats };
 

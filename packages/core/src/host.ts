@@ -601,6 +601,39 @@ export class PrometheusHost {
 		this.resetMessages(sessionId, live);
 	}
 
+	private async pruneSession(sessionId: string, keepTurns: number): Promise<{ prunedEntries: number; remainingMessages: number }> {
+		const live = this.require(sessionId);
+		const s = live.session;
+		if (s.isStreaming) throw new Error("请等待当前回复结束");
+		const projection = s.sessionManager.buildSessionProjection();
+		const userIndexes: number[] = [];
+		for (let i = 0; i < projection.entries.length; i++) {
+			const entry = projection.entries[i];
+			if (entry?.messages?.some((m) => (m as ChatMessage).role === "user")) {
+				userIndexes.push(i);
+			}
+		}
+		if (keepTurns > 0 && userIndexes.length <= keepTurns) {
+			return { prunedEntries: 0, remainingMessages: s.messages.length };
+		}
+		const cutoffIndex = keepTurns <= 0 ? projection.entries.length : userIndexes[userIndexes.length - keepTurns]!;
+		const sm = s.sessionManager;
+		let prunedCount = 0;
+		for (let i = 0; i < cutoffIndex; i++) {
+			const entry = projection.entries[i];
+			if (!entry) continue;
+			const targetId = entry.sourceEntry.id;
+			const target = sm.getEntry(targetId);
+			if (target && (target.type === "custom_message" || (target.type === "message" && ["user", "assistant", "toolResult"].includes((target as any).message?.role)))) {
+				sm.appendContextEdit(targetId, null);
+				prunedCount++;
+			}
+		}
+		s.refreshContext();
+		this.resetMessages(sessionId, live);
+		return { prunedEntries: prunedCount, remainingMessages: s.messages.length };
+	}
+
 	private async retryMessage(sessionId: string, ref: MessageRef, edited?: string): Promise<void> {
 		const live = this.require(sessionId);
 		const { flat, pos } = this.locate(live, ref);
@@ -764,6 +797,9 @@ export class PrometheusHost {
 			await this.workspaces.setArchived(sessionId, false);
 			this.listener.sessionsChanged();
 			return null;
+		},
+		"session.prune": async ({ sessionId, keepTurns }) => {
+			return this.pruneSession(sessionId, keepTurns);
 		},
 
 		"message.delete": async ({ sessionId, ref }) => {
@@ -945,6 +981,8 @@ export class PrometheusHost {
 		"commands.list": ({ sessionId }) => {
 			const s = this.require(sessionId).session;
 			const out: CommandInfo[] = [];
+			out.push({ name: "clear", description: "清空当前会话历史消息", source: "extension" });
+			out.push({ name: "prune", description: "裁剪会话历史，仅保留最近 N 轮（如 /prune 15）", source: "extension" });
 			for (const c of s.extensionRunner.getRegisteredCommands()) out.push({ name: c.invocationName, description: c.description, source: "extension" });
 			for (const t of s.promptTemplates) out.push({ name: t.name, description: t.description, source: "prompt" });
 			for (const k of s.resourceLoader.getSkills().skills) out.push({ name: `skill:${k.name}`, description: k.description, source: "skill" });

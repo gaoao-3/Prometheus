@@ -74,6 +74,12 @@ const M = defineMessages({
 		foldToolsHint: "把一轮里连续的多个工具调用折成一行：运行中自动展开，本轮回合结束自动收起；点一下可手动展开或折叠。",
 		foldTodos: "任务完成后自动收起",
 		foldTodosHint: "任务清单全部完成后自动折叠成一行标题（保留进度和完成状态），几秒内还可以看到结果；再点标题可重新展开。",
+		autoPrune: "会话历史自动裁剪",
+		autoPruneHint: "当会话轮次超过设定值时，自动将更早的历史问答剔除出当前上下文，保持会话轻量流畅。在输入框输入 /prune [数量] 或 /clear 也可手动触发。",
+		autoPruneOff: "不限制（保留全部）",
+		autoPrune15: "保留最近 15 轮",
+		autoPrune25: "保留最近 25 轮",
+		autoPrune50: "保留最近 50 轮",
 		updates: "更新",
 		checkUpdate: "检查更新",
 		checking: "检查中…",
@@ -142,6 +148,12 @@ const M = defineMessages({
 		foldToolsHint: "Group a turn's consecutive tool calls into one row: it opens while they run and folds back when the round is done. Click the row to pin it open or closed.",
 		foldTodos: "Fold finished task list",
 		foldTodosHint: "When every task is completed the checklist folds itself into its header row (progress and completion state stay visible). Click the header to open it again.",
+		autoPrune: "Auto-prune old turns",
+		autoPruneHint: "When a conversation exceeds the threshold, automatically trims older Q&A turns from active context to keep it fast and responsive. You can also use /prune [count] or /clear in the composer.",
+		autoPruneOff: "Disabled (keep all)",
+		autoPrune15: "Keep last 15 turns",
+		autoPrune25: "Keep last 25 turns",
+		autoPrune50: "Keep last 50 turns",
 		updates: "Updates",
 		checkUpdate: "Check for updates",
 		checking: "Checking…",
@@ -408,6 +420,18 @@ function GeneralSettings() {
 						</Row>
 						<Row label={t("foldTodos")} hint={t("foldTodosHint")}>
 							<Toggle checked={prefs.foldTodos} onChange={(foldTodos) => setPrefs({ foldTodos })} />
+						</Row>
+						<Row label={t("autoPrune")} hint={t("autoPruneHint")}>
+							<Segmented<string>
+								value={String(prefs.autoPruneTurns)}
+								onChange={(v) => setPrefs({ autoPruneTurns: Number(v) })}
+								options={[
+									{ value: "0", label: t("autoPruneOff") },
+									{ value: "15", label: t("autoPrune15") },
+									{ value: "25", label: t("autoPrune25") },
+									{ value: "50", label: t("autoPrune50") },
+								]}
+							/>
 						</Row>
 					</Section>
 

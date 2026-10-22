@@ -27,12 +27,14 @@ interface Prefs {
 	foldTodos: boolean;
 	/** Chat column width in px; null follows the window size. */
 	chatWidth: number | null;
+	/** Auto-prune old message turns to keep session lightweight; 0 means disabled. */
+	autoPruneTurns: number;
 }
 
 const KEY = "prometheus.prefs";
 
 function load(): Prefs {
-	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true, foldTodos: true, chatWidth: null };
+	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true, foldTodos: true, chatWidth: null, autoPruneTurns: 0 };
 	try {
 		return { ...fallback, ...(JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Prefs>) };
 	} catch {

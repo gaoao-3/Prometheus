@@ -5,7 +5,7 @@ import type { ImageContent, ThinkingLevel } from "@prometheus/protocol";
 import { defineMessages, useT } from "../lib/i18n.ts";
 import { fileToImage, IMAGE_ACCEPT, ImageError, imageSrc, MAX_IMAGES } from "../lib/images.ts";
 import { type SendMode, setPrefs, usePrefs } from "../lib/prefs.ts";
-import { abortRun, openSettings, pluginCall, sendPrompt, setModel, setPermissionMode, setThinking, toast, unqueue, useStore } from "../lib/store.ts";
+import { abortRun, openSettings, pluginCall, pruneSession, sendPrompt, setModel, setPermissionMode, setThinking, toast, unqueue, useStore } from "../lib/store.ts";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ModePicker } from "./ModePicker.tsx";
 import { nextPermissionMode, PermissionPicker } from "./PermissionPicker.tsx";
@@ -417,6 +417,18 @@ export function Composer({ newChat = false }: { newChat?: boolean }) {
 		if ((!value && !images.length) || reading > 0) return;
 		if (!session) {
 			toast(t("needWorkspace"), "warning");
+			return;
+		}
+		if (value === "/clear") {
+			setText("");
+			await pruneSession(0);
+			return;
+		}
+		const pruneMatch = /^\/prune(?:\s+(\d+))?$/.exec(value);
+		if (pruneMatch) {
+			setText("");
+			const n = pruneMatch[1] ? parseInt(pruneMatch[1], 10) : 15;
+			await pruneSession(n);
 			return;
 		}
 		const attached = images;

@@ -26,6 +26,7 @@ import type {
 import { create } from "zustand";
 import type { ConnState, PrometheusClient } from "./client.ts";
 import { defineMessages, tr } from "./i18n.ts";
+import { usePrefs } from "./prefs.ts";
 
 const M = defineMessages({
 	zh: {
@@ -45,6 +46,8 @@ const M = defineMessages({
 		pkgInstall: "安装",
 		pkgRemove: "卸载",
 		pkgUpdate: "更新",
+		prunedSuccess: "已修剪 {count} 条历史节点，当前保留 {remaining} 条消息",
+		pruneNothing: "当前消息轮次较少，无需裁剪",
 	},
 	en: {
 		compacting: "Compacting context…",
@@ -63,6 +66,8 @@ const M = defineMessages({
 		pkgInstall: "Install",
 		pkgRemove: "Remove",
 		pkgUpdate: "Update",
+		prunedSuccess: "Pruned {count} history entries, keeping {remaining} messages",
+		pruneNothing: "Session is already lean; nothing to prune",
 	},
 });
 
@@ -367,6 +372,13 @@ function flush(): void {
 	if (next.subagents !== session.subagents) noteSubagents(next.subagents);
 	for (const e of events) if (e.type === "tool_execution_start") noteWorkbenchTool(e.toolName, e.args, session.cwd);
 	if (events.some((e) => e.type === "agent_settled" || e.type === "message_end" || e.type === "compaction_end")) void refreshStats();
+	if (events.some((e) => e.type === "agent_settled")) {
+		const autoPrune = usePrefs.getState().autoPruneTurns;
+		if (autoPrune > 0 && next) {
+			const userCount = next.messages.filter((m) => m.role === "user").length;
+			if (userCount > autoPrune + 1) void pruneSession(autoPrune);
+		}
+	}
 }
 
 function enqueue(e: SessionEvent): void {
@@ -660,6 +672,20 @@ export async function deleteMessage(index: number): Promise<void> {
 	const session = get().session;
 	const ref = refOf(index);
 	if (session && ref) await call((c) => c.rpc("message.delete", { sessionId: session.id, ref }));
+}
+
+export async function pruneSession(keepTurns: number): Promise<{ prunedEntries: number; remainingMessages: number } | null> {
+	const session = get().session;
+	if (!session) return null;
+	const res = await call((c) => c.rpc("session.prune", { sessionId: session.id, keepTurns }));
+	if (res) {
+		if (res.prunedEntries > 0) {
+			toast(tr(M, "prunedSuccess", { count: res.prunedEntries, remaining: res.remainingMessages }));
+		} else {
+			toast(tr(M, "pruneNothing"));
+		}
+	}
+	return res ?? null;
 }
 
 export async function retryMessage(index: number): Promise<void> {
