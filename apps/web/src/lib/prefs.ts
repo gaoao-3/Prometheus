@@ -25,12 +25,14 @@ interface Prefs {
 	foldTools: boolean;
 	/** Fold the task list away once every item is completed. */
 	foldTodos: boolean;
+	/** Chat column width in px; null follows the window size. */
+	chatWidth: number | null;
 }
 
 const KEY = "prometheus.prefs";
 
 function load(): Prefs {
-	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true, foldTodos: true };
+	const fallback: Prefs = { theme: "dark", skin: "ember", lang: navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en", closeToTray: true, sendMode: "followUp", foldTools: true, foldTodos: true, chatWidth: null };
 	try {
 		return { ...fallback, ...(JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Prefs>) };
 	} catch {

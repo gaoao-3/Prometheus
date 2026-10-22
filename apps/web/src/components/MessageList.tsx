@@ -336,7 +336,8 @@ function TurnBody({
 		}),
 	);
 	const render = (mode: BlockMode) =>
-		group.map((g) => (
+		// In "final" mode only the last message holds the reply; the others would be empty boxes that each add a flex gap.
+		(mode === "final" ? group.slice(-1) : group).map((g) => (
 			<AssistantBlock
 				key={`${mode}${g.index}`}
 				message={g.message}
@@ -461,7 +462,7 @@ export function MessageList({
 	const waitingOnReply = Boolean(pending) || (streaming && messages[lastIndex]?.role === "user");
 
 	return (
-		<div className="mx-auto w-full max-w-3xl space-y-6 px-3 py-5 md:space-y-8 md:px-5 md:py-8">
+		<div className="chat-col mx-auto w-full space-y-6 px-3 py-5 md:space-y-8 md:px-5 md:py-8">
 			{messages.map((m, i) => {
 				if (m.role === "user") {
 					const text = userText(m);

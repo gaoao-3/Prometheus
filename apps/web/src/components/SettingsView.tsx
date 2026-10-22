@@ -63,6 +63,9 @@ const M = defineMessages({
 		closeToTrayHint: "关闭窗口后 Prometheus 继续在后台运行，会话不会中断；点击托盘图标查看运行中的会话，右键可显示、隐藏或退出。",
 		autoCompact: "自动压缩上下文",
 		autoCompactHint: "上下文用到「模型窗口 − 预留 token」时自动生成摘要并压缩（PI 原生行为），与 PI TUI 共享。装了接管上下文的扩展（如上下文管理插件）时，压缩由其负责，本开关不生效。",
+		chatWidth: "对话宽度",
+		chatWidthHint: "也可以在对话页面里拖动内容两侧的边缘调整，双击边缘恢复自适应。",
+		chatWidthAuto: "自适应",
 		sendMode: "回复中发送时",
 		sendModeHint: "Agent 还在回复时发送新消息：排队是等本轮结束后再发，插队是在当前工具调用结束后立即插入。也可以在发送按钮旁的箭头上切换。",
 		sendFollowUp: "排队",
@@ -128,6 +131,9 @@ const M = defineMessages({
 		closeToTrayHint: "Closing the window keeps Prometheus running in the background so sessions are not interrupted. Click the tray icon to see running sessions; right-click to show, hide or quit.",
 		autoCompact: "Auto-compact context",
 		autoCompactHint: "PI's own behaviour: summarise and compact once the context reaches the model window minus the reserve. Shared with the PI TUI. When an extension owns context management, compaction is its job and this switch has no effect.",
+		chatWidth: "Chat width",
+		chatWidthHint: "You can also drag the edges beside the chat column; double-click an edge to go back to automatic.",
+		chatWidthAuto: "Auto",
 		sendMode: "When sending during a reply",
 		sendModeHint: "What a message does when the agent is still replying: Queue waits for the turn to end, Steer cuts in after the current tool call. You can also switch from the arrow beside the send button.",
 		sendFollowUp: "Queue",
@@ -347,6 +353,24 @@ function GeneralSettings() {
 										{t(s.id)}
 									</button>
 								))}
+							</div>
+						</Row>
+						<Row label={t("chatWidth")} hint={t("chatWidthHint")}>
+							<div className="flex items-center gap-3">
+								<input
+									type="range"
+									min={640}
+									max={1600}
+									step={20}
+									value={prefs.chatWidth ?? 880}
+									onChange={(e) => setPrefs({ chatWidth: Number(e.target.value) })}
+									className="w-40 accent-ember-500"
+									aria-label={t("chatWidth")}
+								/>
+								<span className="w-14 font-mono text-xs text-ink-400">{prefs.chatWidth ? `${prefs.chatWidth}px` : t("chatWidthAuto")}</span>
+								<button type="button" disabled={prefs.chatWidth === null} onClick={() => setPrefs({ chatWidth: null })} className="text-xs text-ember-300 hover:underline disabled:opacity-40">
+									{t("chatWidthAuto")}
+								</button>
 							</div>
 						</Row>
 						<Row label={t("language")}>
