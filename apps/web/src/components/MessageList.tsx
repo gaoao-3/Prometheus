@@ -61,12 +61,44 @@ function userImages(m: UserMessage): ImageContent[] {
 	return typeof m.content === "string" ? [] : m.content.filter((c): c is ImageContent => c.type === "image");
 }
 
+/** Render user bubble text: preserves whitespace, wraps unbreakable words, and renders URLs as clickable links. */
+function renderUserText(text: string) {
+	const urlRegex = /(https?:\/\/[^\s]+)/g;
+	const parts = text.split(urlRegex);
+	if (parts.length <= 1) return text;
+	return parts.map((part, i) => {
+		if (urlRegex.test(part)) {
+			// Strip trailing Chinese/ASCII punctuation if attached to the link
+			const clean = part.replace(/[，。！？、；：)\]}>]+$/, "");
+			const trailing = part.slice(clean.length);
+			return (
+				<span key={i}>
+					<a
+						href={clean}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-mono text-[13.5px] text-ember-400 underline decoration-ember-400/40 underline-offset-3 hover:text-ember-300 hover:decoration-ember-300 break-all"
+					>
+						{clean}
+					</a>
+					{trailing}
+				</span>
+			);
+		}
+		return part;
+	});
+}
+
 /** The bubble of a sent message: pictures above the words, either part optional. */
 function UserBubble({ text, images }: { text: string; images: ImageContent[] }) {
 	return (
-		<div className="flex max-w-[85%] flex-col items-end gap-2">
+		<div className="flex min-w-0 max-w-[85%] flex-col items-end gap-2 md:max-w-[78%]">
 			<ImageStrip images={images} align="end" />
-			{text && <div className="rounded-2xl rounded-br-md border border-ember-500/20 bg-gradient-to-b from-ink-800 to-ink-850 px-4 py-2.5 text-[15px] whitespace-pre-wrap text-ink-100">{text}</div>}
+			{text && (
+				<div className="min-w-0 max-w-full rounded-2xl rounded-br-xs border border-ember-500/20 bg-gradient-to-b from-ink-800 to-ink-850 px-4 py-2.5 text-[15px] leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-ink-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)] md:px-4.5 md:py-3">
+					{renderUserText(text)}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -84,7 +116,7 @@ function UserEditor({ index, initial, onClose }: { index: number; initial: strin
 		if (ok) onClose();
 	};
 	return (
-		<div className="flex w-full max-w-[85%] flex-col items-end gap-2">
+		<div className="flex min-w-0 w-full max-w-[85%] flex-col items-end gap-2 md:max-w-[78%]">
 			<textarea
 				autoFocus
 				value={value}
@@ -97,7 +129,7 @@ function UserEditor({ index, initial, onClose }: { index: number; initial: strin
 						void send();
 					}
 				}}
-				className="w-full resize-none rounded-2xl border border-ember-500/40 bg-ink-900 px-4 py-2.5 text-[15px] text-ink-100 outline-none focus:border-ember-400"
+				className="w-full resize-none rounded-2xl rounded-br-xs border border-ember-500/40 bg-ink-900 px-4 py-2.5 text-[15px] leading-relaxed text-ink-100 outline-none focus:border-ember-400 md:px-4.5 md:py-3"
 			/>
 			<div className="flex gap-2 text-xs">
 				<button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-ink-400 hover:bg-ink-800 hover:text-ink-100">
@@ -385,9 +417,9 @@ async function removeAll(indices: number[]): Promise<void> {
 function Actions({ index, indices, text, canRetry, align, onEdit }: { index: number; indices?: number[]; text: string; canRetry: boolean; align: "start" | "end"; onEdit?: () => void }) {
 	const t = useT(M);
 	const [copied, setCopied] = useState(false);
-	const btn = "rounded-md p-1.5 text-ink-500 transition-colors hover:bg-ink-800 hover:text-ink-100 disabled:pointer-events-none disabled:opacity-30";
+	const btn = "rounded-lg p-1.5 text-ink-500 transition-all hover:bg-ink-800 hover:text-ink-100 active:scale-95 disabled:pointer-events-none disabled:opacity-30";
 	return (
-		<div className={clsx("mt-1 flex gap-0.5 opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 nohover:opacity-100", align === "end" && "justify-end")}>
+		<div className={clsx("mt-1.5 flex gap-1 opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 nohover:opacity-100", align === "end" && "justify-end")}>
 			<button
 				type="button"
 				className={btn}
@@ -444,14 +476,14 @@ export function MessageList({
 	const waitingOnReply = Boolean(pending) || (streaming && messages[lastIndex]?.role === "user");
 
 	return (
-		<div className="mx-auto w-full max-w-3xl space-y-5 px-3 py-5 md:px-5 md:py-8">
+		<div className="mx-auto w-full max-w-3xl space-y-6 px-3 py-5 md:space-y-8 md:px-5 md:py-8">
 			{messages.map((m, i) => {
 				if (m.role === "user") {
 					const text = userText(m);
 					const editing = editingAt === i && !streaming;
 					return (
 						<div key={i} className="group/msg animate-rise">
-							<div className="flex justify-end">
+							<div className="flex min-w-0 justify-end">
 								{editing ? <UserEditor index={i} initial={text} onClose={() => setEditingAt(null)} /> : <UserBubble text={text} images={userImages(m)} />}
 							</div>
 							{!editing && <Actions index={i} text={text} canRetry={!streaming} align="end" onEdit={() => setEditingAt(i)} />}
@@ -505,7 +537,7 @@ export function MessageList({
 			{pending && (
 				// Same key as the real message will get, so the bubble is reused instead of replayed when the server echoes it.
 				<div key={messages.length} className="group/msg animate-rise">
-					<div className="flex justify-end">
+					<div className="flex min-w-0 justify-end">
 						<UserBubble text={pending.text} images={pending.images ?? []} />
 					</div>
 				</div>
