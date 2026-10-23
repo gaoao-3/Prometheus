@@ -70,7 +70,7 @@ export function ToolCluster({
 					running > 0
 						? "border-ember-500/40 ring-1 ring-ember-500/20 shadow-[0_0_15px_-3px_rgba(245,158,11,0.12)]"
 						: failed > 0
-							? "border-rose-500/30 bg-rose-950/10"
+							? "border-rose-400/40 bg-rose-400/5"
 							: "border-ink-800",
 				)}
 			>
@@ -98,17 +98,17 @@ export function ToolCluster({
 					</span>
 					<span className="shrink-0 text-[13px] font-medium text-ink-100">{t("toolCalls", { n: calls.length })}</span>
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 overflow-hidden">
-						{names.slice(0, 5).map(([name, n]) => (
+						{names.slice(0, 4).map(([name, n]) => (
 							<span
 								key={name}
 								className="inline-flex items-center gap-1 rounded-md border border-ink-800 bg-ink-950/60 px-1.5 py-0.5 font-mono text-[11px] text-ink-300"
 							>
 								<ToolIcon name={name} className="size-3 text-ink-400" />
-								<span>{name}</span>
+								<span className="max-w-[80px] truncate sm:max-w-[120px]">{name}</span>
 								{n > 1 && <span className="font-semibold text-ember-400">×{n}</span>}
 							</span>
 						))}
-						{names.length > 5 && <span className="font-mono text-xs text-ink-600">+{names.length - 5}</span>}
+						{names.length > 4 && <span className="font-mono text-xs text-ink-600">+{names.length - 4}</span>}
 					</div>
 					{running > 0 && <span className="shrink-0 font-mono text-[11px] text-ember-300">{t("toolRunning", { n: running })}</span>}
 					{running === 0 && failed > 0 && <span className="shrink-0 font-mono text-[11px] text-rose-400">{t("toolFailed", { n: failed })}</span>}

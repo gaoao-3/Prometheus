@@ -215,13 +215,20 @@ function SessionRow({ s, active, onSelect }: { s: SessionSummary; active: boolea
 			role="button"
 			tabIndex={0}
 			onClick={() => {
-				if (active) return;
+				if (active) {
+					onSelect?.();
+					return;
+				}
 				setOpening(true);
 				onSelect?.();
 				void openSession(s.id).finally(() => setOpening(false));
 			}}
 			onKeyDown={(e) => {
-				if (e.key === "Enter" && !active) {
+				if (e.key === "Enter") {
+					if (active) {
+						onSelect?.();
+						return;
+					}
 					setOpening(true);
 					onSelect?.();
 					void openSession(s.id).finally(() => setOpening(false));

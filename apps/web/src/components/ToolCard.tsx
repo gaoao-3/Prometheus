@@ -144,7 +144,7 @@ export function ToolCard({ call, run, result }: { call: ToolCallContent; run?: T
 	const filePath = ["read", "write", "edit", "replace"].includes(call.name) && typeof call.arguments?.path === "string" ? call.arguments.path : undefined;
 
 	return (
-		<div className={clsx("overflow-hidden rounded-xl border bg-ink-900/70 transition-all", status === "error" ? "border-rose-400/40 bg-rose-950/10" : "border-ink-800")}>
+		<div className={clsx("overflow-hidden rounded-xl border bg-ink-900/70 transition-all", status === "error" ? "border-rose-400/40 bg-rose-400/5" : "border-ink-800")}>
 			<button
 				type="button"
 				onClick={() => setOpen(!open)}
@@ -191,7 +191,7 @@ export function ToolCard({ call, run, result }: { call: ToolCallContent; run?: T
 							<span className="font-medium">{t("arguments")}</span>
 							<CopyBtn text={JSON.stringify(call.arguments, null, 2)} label={t("copy")} />
 						</div>
-						<pre className="max-h-[35dvh] overflow-auto rounded-lg bg-ink-950 p-2.5 font-mono text-[11.5px] text-ink-300 md:max-h-48">{JSON.stringify(call.arguments, null, 2)}</pre>
+						<pre className="max-h-[35dvh] overflow-auto rounded-lg border border-ink-800 bg-ink-950 p-2.5 font-mono text-xs leading-relaxed text-ink-200 md:max-h-48">{JSON.stringify(call.arguments, null, 2)}</pre>
 					</div>
 					{output && (
 						<div>
@@ -206,8 +206,8 @@ export function ToolCard({ call, run, result }: { call: ToolCallContent; run?: T
 							</div>
 							<pre
 								className={clsx(
-									"max-h-[45dvh] overflow-auto rounded-lg p-2.5 font-mono text-[11.5px] break-words whitespace-pre-wrap md:max-h-80",
-									status === "error" ? "border border-rose-500/30 bg-rose-950/20 text-rose-300" : "bg-ink-950 text-ink-300"
+									"max-h-[45dvh] overflow-auto rounded-lg p-2.5 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap md:max-h-80",
+									status === "error" ? "border border-rose-400/35 bg-rose-400/8 text-rose-400 font-medium" : "border border-ink-800 bg-ink-950 text-ink-200"
 								)}
 							>
 								{output}

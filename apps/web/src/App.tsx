@@ -151,7 +151,7 @@ export function App() {
 			<div className="relative flex min-h-0 flex-1">
 				{sidebar && isMobile && <div className="absolute inset-0 z-30 bg-ink-950/60 backdrop-blur-[2px]" onClick={() => setSidebar(false)} aria-hidden />}
 				{sidebar && (
-					<div className={isMobile ? "absolute inset-y-0 left-0 z-40 flex w-[min(20rem,88%)] shadow-2xl shadow-black/60" : "flex"}>
+					<div className={isMobile ? "absolute inset-y-0 left-0 z-40 flex w-[min(22rem,84vw)] shadow-2xl shadow-black/60" : "flex"}>
 						<Sidebar target={target} onDisconnect={() => setTarget(null)} onClose={() => isMobile && setSidebar(false)} />
 					</div>
 				)}

@@ -52,7 +52,9 @@ html[data-chat-resizing] { cursor: col-resize; user-select: none; }
 
 	--color-moss-400: #9bc77a;
 	--color-sky-400: #7fb2d9;
+	--color-rose-300: #fca5a5;
 	--color-rose-400: #f0767a;
+	--color-rose-500: #fb7185;
 
 	--animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 	/* Slow, subtle life signs: the flame and the connection dot should never nag for attention. */
@@ -101,7 +103,9 @@ html[data-chat-resizing] { cursor: col-resize; user-select: none; }
 	--color-ink-100: #1a1613;
 	--color-moss-400: #3f8a2b;
 	--color-sky-400: #2c6fa3;
+	--color-rose-300: #b82c35;
 	--color-rose-400: #d23a42;
+	--color-rose-500: #e0444c;
 }
 
 /* Skins: swap the accent ramp. */
